@@ -406,16 +406,19 @@ export class PermissionPresetService extends TypertRemoteService {
     if (name === AUTO_PRESET) this.autoAdmit?.()
     const current = this.current(session)
     const knobs = this.permissionState(session)
-    const updateKnobs = (): void => {
-      if (spec.sandbox !== (knobs.sandbox ?? this.ctx.shell.sandboxMode)) {
-        setSandboxMode(session, spec.sandbox)
-      }
-      if (spec.approval !== (knobs.approval ?? this.ctx.approval.config.policy ?? 'ask')) {
-        setApproval(spec.approval)
-      }
-    }
-    if (current !== name) session.append('permission/preset', { preset: name })
-    updateKnobs()
+    const sandbox = knobs.sandbox ?? this.ctx.shell.sandboxMode
+    const approval = knobs.approval ?? this.ctx.approval.config.policy ?? 'ask'
+    // The preset event must accompany every knob write this switch drives.
+    // Gating the event on `current() !== name` alone lets a switch evaluated
+    // against a stale or partially hydrated projection record only the knob
+    // events while skipping the preset event, leaving the log's preset
+    // identity out of sync with the folded knobs (observed as a preset event
+    // stuck on one bundle while `sandbox/mode` and `approval/policy`
+    // oscillate). Append whenever the identity differs OR any knob changes.
+    const changed = spec.sandbox !== sandbox || spec.approval !== approval
+    if (current !== name || changed) session.append('permission/preset', { preset: name })
+    if (spec.sandbox !== sandbox) setSandboxMode(session, spec.sandbox)
+    if (spec.approval !== approval) setApproval(spec.approval)
   }
 
   /**
